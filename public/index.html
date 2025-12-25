@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <title>Local Share</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<div id="auth">
+  <h2>🔐 Подключение</h2>
+  <input id="codeInput" placeholder="Введите код..." autocomplete="off" />
+  <button id="connectBtn">Подключиться</button>
+</div>
+
+<div id="app" hidden>
+  <!-- Основной тулбар -->
+  <div class="toolbar">
+    <button id="upBtn">⬆️ Назад</button>
+    <button id="refreshBtn"><span class="refresh-icon">🔄</span> Обновить</button>
+    <button id="newFolderBtn">📁 Папка</button>
+    <button id="uploadBtn">📤 Загрузить</button>
+    <button id="selectModeBtn">☑️ Выбрать</button>
+  </div>
+  
+  <!-- Панель выделения -->
+  <div id="selectionActions" class="selection-toolbar" hidden>
+    <span id="selectedCount">Выберите файлы</span>
+    <button id="selectAllBtn">Выбрать всё</button>
+    <button id="downloadSelectedBtn" disabled>💾 Скачать</button>
+    <button id="deleteSelectedBtn" class="danger" disabled>🗑 Удалить</button>
+    <button id="cancelSelectionBtn">✕ Отмена</button>
+  </div>
+  
+  <!-- Сортировка -->
+  <div class="sort-bar">
+    <span class="sort-label">Сортировка:</span>
+    <button class="sort-btn active asc" data-sort="name">Имя</button>
+    <button class="sort-btn" data-sort="date">Дата</button>
+    <button class="sort-btn" data-sort="size">Размер</button>
+    <button class="sort-btn" data-sort="type">Тип</button>
+  </div>
+  
+  <input type="file" id="fileInput" hidden multiple>
+  <div id="uploadInfo"></div>
+
+  <div id="path"></div>
+  <ul id="fileList"></ul>
+</div>
+
+<div id="viewer" hidden>
+  <div class="viewer-overlay">
+    <div class="viewer-container">
+      <button id="closeViewer">✕</button>
+      <div id="viewerContent"></div>
+    </div>
+  </div>
+</div>
+
+<script src="main.js"></script>
+</body>
+</html>
