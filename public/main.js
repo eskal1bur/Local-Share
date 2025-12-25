@@ -282,6 +282,17 @@ async function deleteSelected() {
   exitSelectionMode();
 }
 
+function renameItem(oldName) {
+  const newName = prompt('Новое имя:', oldName);
+  if (newName && newName !== oldName) {
+    ws.send(JSON.stringify({
+      type: 'rename',
+      oldName: oldName,
+      newName: newName
+    }));
+  }
+}
+
 // ========== Скачивание ==========
 const downloadQueue = [];
 let isDownloading = false;
@@ -290,21 +301,29 @@ function downloadFile(name) {
   ws.send(JSON.stringify({ type: 'download', name, action: 'save' }));
 }
 
-async function downloadSelected() {
-  const names = Array.from(selectedItems).filter(name => {
-    const item = currentItems.find(i => i.name === name);
-    return item && item.type === 'file';
-  });
-  
+function downloadSelected() {
+  const names = Array.from(selectedItems);
   if (names.length === 0) return;
-  
-  showNotification(`📥 Скачивание ${names.length} файл(ов)...`);
-  
-  for (const name of names) {
-    downloadQueue.push(name);
+
+  // Если выбран 1 файл (и это именно файл, а не папка)
+  if (names.length === 1) {
+    const item = currentItems.find(i => i.name === names[0]);
+    if (item && item.type === 'file') {
+      downloadQueue.push(item.name);
+      processDownloadQueue();
+      exitSelectionMode();
+      return;
+    }
   }
+
+  // Если выбрано много файлов ИЛИ выбрана папка -> качаем ZIP
+  showNotification('📦 Создание архива...');
   
-  processDownloadQueue();
+  ws.send(JSON.stringify({
+    type: 'download_zip',
+    files: names
+  }));
+  
   exitSelectionMode();
 }
 
@@ -318,20 +337,15 @@ function processDownloadQueue() {
 }
 
 function triggerDownload(url, filename) {
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  a.style.display = 'none';
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
+  // Для ZIP и обычных файлов используем location.assign для лучшей совместимости
+  window.location.assign(url);
   
   setTimeout(() => {
     isDownloading = false;
     if (downloadQueue.length > 0) {
       processDownloadQueue();
     }
-  }, 500);
+  }, 1000);
 }
 
 // ========== Загрузки (Upload) ==========
@@ -682,6 +696,15 @@ function connect(code) {
       }
     }
 
+    if (msg.type === 'rename') {
+      ws.send(JSON.stringify({ type: 'ls' })); // Просто обновляем список
+    }
+
+    if (msg.type === 'zip_ready') {
+      const url = `/zip/${msg.token}`;
+      triggerDownload(url, 'archive.zip');
+    }
+
     if (msg.type === 'rm' || msg.type === 'rmdir' || msg.type === 'mkdir') {
       ws.send(JSON.stringify({ type: 'ls' }));
     }
@@ -734,6 +757,21 @@ document.getElementById('refreshBtn').onclick = () => {
     showNotification('❌ Нет соединения', 'error');
   }
 };
+
+// ========== Выход (если кнопка добавлена в HTML) ==========
+const logoutBtn = document.getElementById('logoutBtn');
+if (logoutBtn) {
+  logoutBtn.onclick = () => {
+    sessionStorage.removeItem(SAVED_PASS_KEY);
+    if (ws) ws.close();
+    app.hidden = true;
+    auth.hidden = false;
+    document.getElementById('codeInput').value = '';
+    currentUpload = null;
+    uploadQueue.length = 0;
+    updateUploadUI();
+  };
+}
 
 // ========== Уведомления ==========
 function showNotification(text, type = 'success') {
@@ -937,6 +975,20 @@ function render(path, items) {
       if (item.type === 'dir') {
         li.onclick = () => ws.send(JSON.stringify({ type: 'cd', name: item.name }));
 
+        // Создаем контейнер действий для папки
+        const actions = document.createElement('div');
+        actions.className = 'file-actions';
+
+        // Кнопка переименования для папки
+        const renameBtn = document.createElement('span');
+        renameBtn.className = 'view-btn';
+        renameBtn.textContent = '✏️';
+        renameBtn.title = 'Переименовать';
+        renameBtn.onclick = e => {
+          e.stopPropagation();
+          renameItem(item.name);
+        };
+
         const del = document.createElement('span');
         del.className = 'delete';
         del.textContent = '🗑';
@@ -944,7 +996,11 @@ function render(path, items) {
           e.stopPropagation();
           deleteFolder(item.name);
         };
-        li.appendChild(del);
+        
+        actions.appendChild(renameBtn);
+        actions.appendChild(del);
+        li.appendChild(actions);
+
       } else {
         const actions = document.createElement('div');
         actions.className = 'file-actions';
@@ -967,6 +1023,15 @@ function render(path, items) {
           downloadFile(item.name);
         };
         
+        const renameBtn = document.createElement('span');
+        renameBtn.className = 'view-btn'; // Используем тот же стиль, что и у просмотра
+        renameBtn.textContent = '✏️';
+        renameBtn.title = 'Переименовать';
+        renameBtn.onclick = e => {
+          e.stopPropagation();
+          renameItem(item.name);
+        };
+        
         const del = document.createElement('span');
         del.className = 'delete';
         del.textContent = '🗑';
@@ -978,6 +1043,7 @@ function render(path, items) {
         
         actions.appendChild(view);
         actions.appendChild(download);
+        actions.appendChild(renameBtn); // Добавляем в список
         actions.appendChild(del);
         li.appendChild(actions);
       }

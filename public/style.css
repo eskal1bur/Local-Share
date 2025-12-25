@@ -403,7 +403,7 @@ button:disabled {
 /* ========== Действия с файлами ========== */
 .file-actions {
   display: flex;
-  gap: 6px;
+  gap: 4px;
   flex-shrink: 0;
 }
 

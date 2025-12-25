@@ -4,6 +4,7 @@ const http = require('http');
 const express = require('express');
 const WebSocket = require('ws');
 const crypto = require('crypto');
+const archiver = require('archiver');
 
 // ======================
 // НАСТРОЙКИ
@@ -387,10 +388,10 @@ cleanupTrashOnStart();
 // ======================
 const downloadTokens = new Map();
 
-function createDownloadToken(filePath) {
+function createDownloadToken(data) { // Принимаем объект data целиком
   const token = crypto.randomBytes(16).toString('hex');
   downloadTokens.set(token, {
-    path: filePath,
+    ...data, // Копируем все поля (path, files, type и т.д.)
     expires: Date.now() + 300000
   });
   return token;
@@ -499,6 +500,62 @@ app.get('/download/:token', (req, res) => {
     console.error('Download error:', err);
     res.status(500).send('Error reading file');
   }
+});
+
+// ======================
+// ZIP DOWNLOAD ENDPOINT
+// ======================
+app.get('/zip/:token', (req, res) => {
+  const token = req.params.token;
+  const data = downloadTokens.get(token);
+
+  if (!data || data.expires < Date.now()) {
+    return res.status(404).send('Token expired');
+  }
+
+  // Настройка заголовков
+  const archiveName = 'archive.zip';
+  res.setHeader('Content-Type', 'application/zip');
+  res.setHeader('Content-Disposition', `attachment; filename="${archiveName}"`);
+
+  // Создаем архив
+  const archive = archiver('zip', {
+    zlib: { level: 5 } // Уровень сжатия (0-9)
+  });
+
+  // Если вдруг ошибка архивации
+  archive.on('error', (err) => {
+    console.error('Archiver error:', err);
+    res.status(500).end();
+  });
+
+  // Пайпим архив в ответ (отправляем клиенту на лету)
+  archive.pipe(res);
+
+  // Добавляем файлы/папки в архив
+  const parentDir = resolveSafePath(data.cwd); // Текущая папка, откуда качаем
+
+  for (const itemName of data.files) {
+    const fullPath = path.join(parentDir, itemName);
+    
+    if (!fs.existsSync(fullPath)) continue;
+
+    const stat = fs.statSync(fullPath);
+    
+    if (stat.isDirectory()) {
+      // Добавляем папку рекурсивно
+      archive.directory(fullPath, itemName);
+    } else {
+      // Добавляем файл
+      archive.file(fullPath, { name: itemName });
+    }
+  }
+
+  // Финализируем (закрываем) архив
+  archive.finalize();
+  
+  // Токен удаляем сразу (или можно оставить до истечения)
+  downloadTokens.delete(token);
 });
 
 // ======================
@@ -637,12 +694,58 @@ wss.on('connection', (ws) => {
       try {
         const safeName = sanitizeFilename(msg.name);
         const vp = path.join(session.currentPath, safeName).replace(/\\/g, '/');
-        const token = createDownloadToken(vp);
+        const token = createDownloadToken({ path: vp });
         ws.send(JSON.stringify({
           type: 'download_ready',
           token,
           filename: safeName,
           action: msg.action || 'view' // Передаём действие обратно
+        }));
+      } catch (err) {
+        ws.send(JSON.stringify({ type: 'error', message: err.message }));
+      }
+      return;
+    }
+
+        // ---------- RENAME ----------
+    if (msg.type === 'rename') {
+      try {
+        const safeOldName = sanitizeFilename(msg.oldName);
+        const safeNewName = sanitizeFilename(msg.newName);
+        
+        const oldPath = resolveSafePath(path.join(session.currentPath, safeOldName));
+        const newPath = resolveSafePath(path.join(session.currentPath, safeNewName));
+
+        if (!fs.existsSync(oldPath)) {
+           throw new Error('File not found');
+        }
+        if (fs.existsSync(newPath)) {
+           throw new Error('Name already taken');
+        }
+
+        fs.renameSync(oldPath, newPath);
+        console.log(`✏️ Renamed: ${safeOldName} -> ${safeNewName}`);
+        
+        ws.send(JSON.stringify({ type: 'rename', ok: true }));
+      } catch (err) {
+        ws.send(JSON.stringify({ type: 'error', message: err.message }));
+      }
+      return;
+    }
+
+    // ---------- DOWNLOAD SELECTED (ZIP) ----------
+    if (msg.type === 'download_zip') {
+      try {
+        // msg.files - массив имен файлов ['file1.txt', 'folder2']
+        const token = createDownloadToken({
+          cwd: session.currentPath, // Запоминаем текущую папку
+          files: msg.files,
+          type: 'zip'
+        });
+        
+        ws.send(JSON.stringify({
+          type: 'zip_ready',
+          token: token
         }));
       } catch (err) {
         ws.send(JSON.stringify({ type: 'error', message: err.message }));
