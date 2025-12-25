@@ -2,6 +2,8 @@ let ws;
 let refreshInterval;
 let lastViewedToken = null;
 
+const SAVED_PASS_KEY = 'localshare_password';
+
 // Очередь загрузок
 const uploadQueue = [];
 let currentUpload = null;
@@ -558,13 +560,21 @@ async function sendFileChunks() {
 
 // ========== Подключение ==========
 function connect(code) {
+  // Если код не передан, берем из поля ввода
+  const passwordToUse = code || document.getElementById('codeInput').value.trim();
+  
+  if (!passwordToUse) {
+    alert('Введите пароль!');
+    return;
+  }
+
   ws = new WebSocket(`ws://${location.host}`);
   ws.binaryType = 'arraybuffer';
   
   ws.onopen = () => {
     ws.send(JSON.stringify({
       type: 'auth',
-      code: code || document.getElementById('codeInput').value.trim()
+      code: passwordToUse
     }));
   };
 
@@ -573,6 +583,9 @@ function connect(code) {
 
     if (msg.type === 'auth') {
       if (msg.ok) {
+        // УСПЕХ: Сохраняем пароль в память браузера
+        sessionStorage.setItem(SAVED_PASS_KEY, passwordToUse);
+        
         auth.hidden = true;
         app.hidden = false;
         
@@ -587,7 +600,16 @@ function connect(code) {
           }
         }, 5000);
       } else {
-        alert('Неверный код!');
+        // ОШИБКА: Если сохраненный пароль больше не подходит — удаляем его
+        sessionStorage.removeItem(SAVED_PASS_KEY);
+        auth.hidden = false;
+        app.hidden = true;
+        
+        // Если это была попытка ручного ввода — ругаемся
+        if (!code) {
+           alert('Неверный пароль!');
+           document.getElementById('codeInput').value = '';
+        }
       }
       return;
     }
@@ -679,7 +701,22 @@ function connect(code) {
   };
 }
 
-document.getElementById('connectBtn').onclick = () => connect();
+// Привязка кнопки
+// Обработка нажатия Enter в поле ввода
+document.getElementById('codeInput').onkeydown = (e) => {
+  if (e.key === 'Enter') {
+    connect(); // Вызываем ту же функцию, что и кнопка
+  }
+};
+
+// АВТО-ВХОД ПРИ ЗАГРУЗКЕ СТРАНИЦЫ
+window.addEventListener('load', () => {
+    const savedPass = sessionStorage.getItem(SAVED_PASS_KEY);
+    if (savedPass) {
+        console.log('🔄 Авто-вход по сохраненному паролю...');
+        connect(savedPass);
+    }
+});
 
 // ========== Кнопка Refresh ==========
 document.getElementById('refreshBtn').onclick = () => {

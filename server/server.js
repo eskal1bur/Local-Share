@@ -23,18 +23,16 @@ const MAX_FOLDER_DELETE_ATTEMPTS = 20; // Вместо 120
 const activeStreams = new Map(); // token -> { stream, res, filePath }
 
 // ======================
-// ОДНОРАЗОВЫЙ КОД
+// АВТОРИЗАЦИЯ
 // ======================
-function generateCode() {
-  return crypto.randomBytes(3).toString('hex').toUpperCase();
-}
+// Задай здесь свой пароль!
+const ACCESS_PASSWORD = 'SuperLocalStorage'; 
 
-let connectionCode = generateCode();
-console.log('🔑 Connection code:', connectionCode);
+console.log('🔑 Server password:', ACCESS_PASSWORD);
 
-function regenerateCode() {
-  connectionCode = generateCode();
-  console.log('🔑 New connection code:', connectionCode);
+// Функция теперь просто проверяет пароль, не меняя его
+function checkPassword(inputCode) {
+  return inputCode === ACCESS_PASSWORD;
 }
 
 // ======================
@@ -594,10 +592,10 @@ wss.on('connection', (ws) => {
 
     // ---------- AUTH ----------
     if (msg.type === 'auth') {
-      if (msg.code !== connectionCode) {
-        ws.send(JSON.stringify({ type: 'auth', ok: false }));
-        ws.close();
-        return;
+      if (!checkPassword(msg.code)) {
+          ws.send(JSON.stringify({ type: 'auth', ok: false }));
+          ws.close();
+          return;
       }
 
       sessionId = crypto.randomUUID();
@@ -610,7 +608,6 @@ wss.on('connection', (ws) => {
       ws.send(JSON.stringify({ type: 'auth', ok: true }));
       console.log('✅ Authorized:', sessionId);
       
-      regenerateCode();
       return;
     }
 
