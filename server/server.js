@@ -1050,7 +1050,7 @@ process.on('SIGTERM', shutdown);
 // СТАРТ
 // ======================
 server.listen(PORT, () => {
-  console.log(`🚀 Server running on https://localhost:${PORT}`);
+  console.log(`🚀 Server running on http://localhost:${PORT}`);
   console.log(`📁 Shared folder: ${SHARED_ROOT}`);
   console.log(`📊 Max file size: ${MAX_FILE_SIZE / (1024*1024*1024)}GB`);
 });

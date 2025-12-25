@@ -725,11 +725,13 @@ function connect(code) {
   };
 }
 
-// Привязка кнопки
-// Обработка нажатия Enter в поле ввода
+// ========== ПРИВЯЗКА СОБЫТИЙ ВХОДА ==========
+// 1. Привязка клика по кнопке
+document.getElementById('connectBtn').onclick = () => connect();
+// 2. Обработка нажатия Enter в поле ввода
 document.getElementById('codeInput').onkeydown = (e) => {
   if (e.key === 'Enter') {
-    connect(); // Вызываем ту же функцию, что и кнопка
+    connect(); 
   }
 };
 
