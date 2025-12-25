@@ -795,7 +795,9 @@ wss.on('connection', (ws) => {
           size: msg.size,
           lastReport: 0,
           active: true,
-          filename: safeName
+          filename: safeName,
+          realPath: realPath,          // Чтобы знать, какой файл обновлять
+          modified: msg.modified       // Дата, пришедшая от клиента
         });
         
         sessionUploads.add(uploadId);
@@ -819,11 +821,31 @@ wss.on('connection', (ws) => {
       
       if (upload) {
         upload.active = false;
+
+        // 1. Сначала подписываемся на событие ПОЛНОГО закрытия файла
+        // Это гарантирует, что ОС уже отпустила файл
+        upload.stream.on('close', () => {
+            
+            // 2. Теперь безопасно меняем дату
+            if (upload.modified && upload.realPath) {
+              try {
+                const timestamp = new Date(upload.modified);
+                fs.utimesSync(upload.realPath, timestamp, timestamp);
+                console.log(`🕒 Timestamp updated: ${upload.filename}`);
+              } catch (timeErr) {
+                console.error('Failed to set timestamp:', timeErr);
+              }
+            }
+
+            // 3. Чистим память и отправляем ответ клиенту
+            uploads.delete(uploadId);
+            sessionUploads.delete(uploadId);
+            console.log(`✅ Upload complete: ${upload.filename}`);
+            ws.send(JSON.stringify({ type: 'upload_done', uploadId }));
+        });
+
+        // 4. И только теперь даем команду на закрытие
         upload.stream.end();
-        uploads.delete(uploadId);
-        sessionUploads.delete(uploadId);
-        console.log(`✅ Upload complete: ${upload.filename}`);
-        ws.send(JSON.stringify({ type: 'upload_done', uploadId }));
       }
       return;
     }

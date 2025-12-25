@@ -513,7 +513,8 @@ function processNextUpload() {
     type: 'upload_start',
     uploadId: currentUpload.id,
     name: currentUpload.file.name,
-    size: currentUpload.file.size
+    size: currentUpload.file.size,
+    modified: currentUpload.file.lastModified
   }));
   
   updateUploadUI();
