@@ -808,56 +808,155 @@ function getFileIcon(filename) {
 
 // ========== Открытие файлов ==========
 function openFile(token, filename) {
-  const url = `/download/${token}`;
+  const url = `/download/${token}?action=view`; 
+  
   const ext = filename.split('.').pop().toLowerCase();
   
   viewerContent.innerHTML = '';
-  
-  if (['mp4', 'webm', 'ogg'].includes(ext)) {
+  viewer.hidden = false;
+
+  // 1. ВИДЕО
+  if (['mp4', 'webm', 'ogg', 'mkv', 'mov', 'avi'].includes(ext)) {
+    // === ИСПРАВЛЕНИЕ 2: Убираем type="..." для MKV/AVI ===
+    // Если не указывать type, браузер сам попробует определить кодеки.
+    // Это иногда помогает со звуком (если там AAC/MP3), но с AC3 чуда не будет.
+    let sourceTag = `<source src="${url}">`;
+    
+    // Для MP4 лучше оставить тип явно, это ускоряет старт
+    if (ext === 'mp4') sourceTag = `<source src="${url}" type="video/mp4">`;
+    
     viewerContent.innerHTML = `
-      <video controls autoplay playsinline>
-        <source src="${url}" type="video/${ext === 'ogg' ? 'ogg' : ext}">
-      </video>
-      <p class="viewer-filename">${filename}</p>
-    `;
+      <div style="width: 100%; max-width: 1000px;">
+        <video controls autoplay playsinline style="width: 100%; max-height: 80vh; background: black;">
+           ${sourceTag}
+           Ваш браузер не поддерживает воспроизведение этого файла.
+        </video>
+        <p class="viewer-filename">${filename}</p>
+        ${(ext === 'mkv' || ext === 'avi') ? '<p style="font-size:11px; color:#666; margin-top:5px">⚠️ Если нет звука, значит используется кодек AC3/DTS, который браузеры не поддерживают.</p>' : ''}
+      </div>`;
   }
-  else if (['mp3', 'wav', 'ogg', 'm4a'].includes(ext)) {
+  // 2. АУДИО
+  else if (['mp3', 'wav', 'ogg', 'm4a', 'flac'].includes(ext)) {
     viewerContent.innerHTML = `
       <div class="audio-player">
         <h3>🎵 ${filename}</h3>
-        <audio controls autoplay>
-          <source src="${url}">
-        </audio>
-      </div>
-    `;
+        <audio controls autoplay style="width: 100%;"><source src="${url}"></audio>
+      </div>`;
   }
-  else if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg'].includes(ext)) {
-    viewerContent.innerHTML = `
-      <img src="${url}" alt="${filename}">
-      <p class="viewer-filename">${filename}</p>
-    `;
+  
+  // 3. КАРТИНКИ
+  else if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg', 'ico'].includes(ext)) {
+    viewerContent.innerHTML = `<img src="${url}" alt="${filename}" style="max-width: 100%; max-height: 85vh;">`;
   }
+  
+  // 4. PDF (Iframe - самый надежный способ для десктопа)
   else if (ext === 'pdf') {
-    viewerContent.innerHTML = `<iframe src="${url}"></iframe>`;
+    // Благодаря ?action=view сервер отдаст Content-Disposition: inline
+    // И Chrome корректно отобразит PDF внутри iframe, а не скачает его
+    viewerContent.innerHTML = `<iframe src="${url}" style="width: 80vw; height: 85vh; border: none; background: white;"></iframe>`;
   }
-  else if (['txt', 'md', 'json', 'xml', 'html', 'css', 'js', 'py', 'java', 'cpp', 'c', 'php'].includes(ext)) {
+  
+  // 5. DOCX (КРАСИВЫЙ WORD)
+  else if (ext === 'docx') {
+    viewerContent.innerHTML = `
+      <div class="doc-container" style="background: #e0e0e0; padding: 20px; width: 100%; height: 85vh; overflow: auto; display: flex; justify-content: center;">
+         <div id="docx-wrapper" style="background: white; color: black; padding: 0; box-shadow: 0 0 10px rgba(0,0,0,0.5);">Загрузка документа...</div>
+      </div>`;
+    
+    fetch(url)
+      .then(res => res.blob())
+      .then(blob => {
+        const docxOptions = {
+          inWrapper: false, // Рендерить чисто контент
+          ignoreWidth: false,
+          experimental: true
+        };
+        // docx-preview библиотека
+        docx.renderAsync(blob, document.getElementById("docx-wrapper"), null, docxOptions)
+          .then(() => console.log("Docx rendered"))
+          .catch(e => document.getElementById("docx-wrapper").innerHTML = `Ошибка: ${e}`);
+      });
+  }
+  
+  // 6. XLSX / XLS (EXCEL)
+  else if (['xlsx', 'xls', 'csv'].includes(ext)) {
+    viewerContent.innerHTML = `
+      <div class="excel-container" style="background: white; color: black; padding: 10px; width: 90vw; height: 85vh; overflow: auto;">
+        <div id="excel-wrapper">Загрузка таблицы...</div>
+      </div>`;
+      
+    fetch(url)
+      .then(res => res.arrayBuffer())
+      .then(data => {
+        const workbook = XLSX.read(data, {type: 'array'});
+        const firstSheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[firstSheetName];
+        const html = XLSX.utils.sheet_to_html(worksheet);
+        document.getElementById('excel-wrapper').innerHTML = html;
+        
+        // Немного стилей для таблицы
+        const table = document.getElementById('excel-wrapper').querySelector('table');
+        if (table) {
+            table.style.borderCollapse = 'collapse';
+            table.style.width = '100%';
+            table.querySelectorAll('td, th').forEach(td => {
+                td.style.border = '1px solid #ccc';
+                td.style.padding = '4px';
+                td.style.fontSize = '12px';
+            });
+        }
+      });
+  }
+  
+  // 7. ZIP / RAR (Архивы - просмотр списка)
+  // Примечание: JSZip читает только ZIP. Для RAR нужны тяжелые либы. Сделаем пока для ZIP.
+  else if (ext === 'zip') {
+    viewerContent.innerHTML = `
+      <div class="archive-viewer" style="background: #222; padding: 20px; width: 500px; max-width: 90vw; border-radius: 10px; text-align: left;">
+        <h3 style="margin-bottom: 10px; color: #4ecca3;">📦 Содержимое архива</h3>
+        <ul id="zip-list" style="list-style: none; max-height: 60vh; overflow: auto;">Загрузка списка...</ul>
+      </div>`;
+      
+    fetch(url)
+      .then(res => res.blob())
+      .then(JSZip.loadAsync)
+      .then(zip => {
+        const list = document.getElementById('zip-list');
+        list.innerHTML = '';
+        
+        // Перебираем файлы
+        zip.forEach((relativePath, zipEntry) => {
+           const li = document.createElement('li');
+           li.style.padding = '5px 0';
+           li.style.borderBottom = '1px solid #333';
+           li.style.color = zipEntry.dir ? '#f1c40f' : '#ccc'; // Папки желтым
+           li.textContent = (zipEntry.dir ? '📁 ' : '📄 ') + zipEntry.name;
+           list.appendChild(li);
+        });
+      })
+      .catch(e => {
+         document.getElementById('zip-list').innerHTML = `<li style="color: red">Не удалось прочитать архив (возможно, запаролен).</li>`;
+      });
+  }
+  
+  // 8. ТЕКСТ / КОД
+  else if (['txt', 'md', 'json', 'xml', 'html', 'css', 'js', 'py', 'java', 'c', 'cpp', 'ini', 'log'].includes(ext)) {
     fetch(url)
       .then(r => r.text())
       .then(text => {
-        viewerContent.innerHTML = `
-          <div class="text-viewer">
-            <h3>📄 ${filename}</h3>
-            <pre>${escapeHtml(text)}</pre>
-          </div>
-        `;
+         if (text.length > 100000) text = text.substring(0, 100000) + '\n... (файл обрезан)';
+         viewerContent.innerHTML = `
+           <div class="text-viewer" style="background: #222; text-align: left; width: 80vw; max-height: 80vh; overflow: auto; padding: 20px;">
+             <pre style="white-space: pre-wrap; word-break: break-all; color: #ddd;">${escapeHtml(text)}</pre>
+           </div>`;
       });
   }
-  else {
-    triggerDownload(url, filename);
-    return;
-  }
   
-  viewer.hidden = false;
+  // 9. ОСТАЛЬНОЕ
+  else {
+    viewer.hidden = true;
+    triggerDownload(url, filename);
+  }
 }
 
 function escapeHtml(text) {

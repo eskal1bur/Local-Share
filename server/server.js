@@ -420,39 +420,80 @@ app.get('/download/:token', (req, res) => {
     const ext = path.extname(filePath).toLowerCase();
     
     const mimeTypes = {
+      // Видео
       '.mp4': 'video/mp4',
       '.webm': 'video/webm',
-      '.mkv': 'video/x-matroska',
+      '.mkv': 'video/x-matroska', // Важно для MKV
       '.avi': 'video/x-msvideo',
       '.mov': 'video/quicktime',
+      '.flv': 'video/x-flv',
+      '.wmv': 'video/x-ms-wmv',
+      
+      // Аудио
       '.mp3': 'audio/mpeg',
       '.wav': 'audio/wav',
       '.ogg': 'audio/ogg',
       '.m4a': 'audio/mp4',
       '.flac': 'audio/flac',
+      
+      // Картинки
       '.jpg': 'image/jpeg',
       '.jpeg': 'image/jpeg',
       '.png': 'image/png',
       '.gif': 'image/gif',
       '.webp': 'image/webp',
       '.svg': 'image/svg+xml',
+      '.bmp': 'image/bmp',
+      '.ico': 'image/x-icon',
+      
+      // Документы
       '.pdf': 'application/pdf',
+      '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', // Word
+      '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', // Excel
+      
+      // Текст и код
       '.txt': 'text/plain; charset=utf-8',
       '.html': 'text/html',
       '.css': 'text/css',
       '.js': 'text/javascript',
       '.json': 'application/json',
       '.xml': 'text/xml',
+      '.md': 'text/markdown',
+      '.log': 'text/plain; charset=utf-8',
+      '.ini': 'text/plain; charset=utf-8',
+      '.c': 'text/plain; charset=utf-8',
+      '.cpp': 'text/plain; charset=utf-8',
+      '.h': 'text/plain; charset=utf-8',
+      '.cs': 'text/plain; charset=utf-8',
+      '.py': 'text/plain; charset=utf-8',
+      '.java': 'text/plain; charset=utf-8',
+      '.php': 'text/plain; charset=utf-8',
+      '.sh': 'text/plain; charset=utf-8',
+      '.bat': 'text/plain; charset=utf-8',
+
+            // Архивы
+      '.zip': 'application/zip',
+      '.rar': 'application/x-rar-compressed',
+      '.7z': 'application/x-7z-compressed',
+      '.tar': 'application/x-tar',
+      '.gz': 'application/gzip',
+      
+      // Презентации
+      '.ppt': 'application/vnd.ms-powerpoint',
+      '.pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
     };
     
     const mimeType = mimeTypes[ext] || 'application/octet-stream';
-    
     res.setHeader('Content-Type', mimeType);
-    // encodeURIComponent нужен, чтобы русские имена файлов не ломали заголовок
+
+    // === ИСПРАВЛЕНИЕ ===
+    // Смотрим, хочет ли клиент просто посмотреть файл или скачать
+    const action = req.query.action; // Получаем параметр ?action=...
+    const disposition = action === 'view' ? 'inline' : 'attachment';
+    
     const downloadName = encodeURIComponent(path.basename(filePath));
-    res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${downloadName}`);
-    res.setHeader('Accept-Ranges', 'bytes');
-    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
+    // Ставим inline или attachment в зависимости от запроса
+    res.setHeader('Content-Disposition', `${disposition}; filename*=UTF-8''${downloadName}`);
     res.setHeader('Accept-Ranges', 'bytes');
     res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
     res.setHeader('Pragma', 'no-cache');

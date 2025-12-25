@@ -878,3 +878,11 @@ button:disabled {
     font-size: 13px;
   }
 }
+
+/* Стили для документов */
+.docx-wrapper { 
+    background: white; 
+    box-shadow: 0 0 10px rgba(0,0,0,0.2); 
+    margin-bottom: 20px;
+}
+.docx-wrapper section { padding: 30px !important; } /* Отступы страницы */
