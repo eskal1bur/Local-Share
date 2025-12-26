@@ -6,6 +6,7 @@ const WebSocket = require('ws');
 const crypto = require('crypto');
 const archiver = require('archiver');
 const os = require('os');
+const qrcode = require('qrcode-terminal');
 
 // ======================
 // НАСТРОЙКИ
@@ -1095,7 +1096,6 @@ function printServerInfo() {
   for (const name of Object.keys(interfaces)) {
     for (const iface of interfaces[name]) {
       if (iface.family === 'IPv4' && !iface.internal) {
-        // 192.168.x.x - стандарт для дома, 10.x.x.x и 172.x.x.x - часто локалки
         if (iface.address.startsWith('192.168.') || iface.address.startsWith('10.') || iface.address.startsWith('172.')) {
           wifiLAN.push(iface.address);
         } else {
@@ -1105,10 +1105,11 @@ function printServerInfo() {
     }
   }
 
+  // 2. Выводим заголовок
   console.log(`🚀 Server is running!`);
   console.log('='.repeat(50));
   
-  // 3. Выводим ссылки подключения
+  // 3. Выводим текстовые ссылки
   console.log('\n🔗 Connect using one of these:');
   console.log(`   🏠 Local:       http://localhost:${PORT}`);
   
@@ -1120,10 +1121,24 @@ function printServerInfo() {
     console.log(`   🌐 Other:       http://${ip}:${PORT}`);
   });
 
-  console.log('\n' + '='.repeat(50));
+  // 4. ГЕНЕРАЦИЯ QR-КОДА (Новая часть)
+  // Мы берем первый найденный Wi-Fi адрес и делаем для него код
+  if (wifiLAN.length > 0) {
+    const mainIp = wifiLAN[0];
+    const url = `http://${mainIp}:${PORT}`;
+    
+    console.log(`\n📱 Scan QR to connect (${mainIp}):\n`);
+    
+    // small: true делает QR код компактным, чтобы влезал в экран
+    qrcode.generate(url, { small: true });
+  }
 
-  // 4. Выводим настройки (как ты просил)
-  console.log(`\n📁 Shared folder: ${SHARED_ROOT}`); // Дублируем, если нужно именно внизу
+  console.log('='.repeat(50));
+
+  // 5. Выводим настройки (как ты просил)
+  // (Если ты не делал конфиг файл, используй SHARED_ROOT, если делал - config.sharedRoot)
+  // Я пишу вариант для старых переменных, как ты хотел в прошлом сообщении:
+  console.log(`\n📁 Shared folder: ${SHARED_ROOT}`); 
   console.log(`📊 Max file size: ${(MAX_FILE_SIZE / (1024*1024*1024)).toFixed(2)} GB`);
   console.log(`🔑 Server password: ${ACCESS_PASSWORD}`);
   console.log('\nWaiting for connections...\n');
