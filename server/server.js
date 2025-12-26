@@ -5,6 +5,7 @@ const express = require('express');
 const WebSocket = require('ws');
 const crypto = require('crypto');
 const archiver = require('archiver');
+const os = require('os');
 
 // ======================
 // НАСТРОЙКИ
@@ -28,8 +29,6 @@ const activeStreams = new Map(); // token -> { stream, res, filePath }
 // ======================
 // Задай здесь свой пароль!
 const ACCESS_PASSWORD = 'SuperLocalStorage'; 
-
-console.log('🔑 Server password:', ACCESS_PASSWORD);
 
 // Функция теперь просто проверяет пароль, не меняя его
 function checkPassword(inputCode) {
@@ -1087,11 +1086,52 @@ function shutdown() {
 process.on('SIGINT', shutdown);
 process.on('SIGTERM', shutdown);
 
+function printServerInfo() {
+  const interfaces = os.networkInterfaces();
+  const wifiLAN = [];
+  const others = [];
+
+  // 1. Сортируем IP адреса
+  for (const name of Object.keys(interfaces)) {
+    for (const iface of interfaces[name]) {
+      if (iface.family === 'IPv4' && !iface.internal) {
+        // 192.168.x.x - стандарт для дома, 10.x.x.x и 172.x.x.x - часто локалки
+        if (iface.address.startsWith('192.168.') || iface.address.startsWith('10.') || iface.address.startsWith('172.')) {
+          wifiLAN.push(iface.address);
+        } else {
+          others.push(iface.address);
+        }
+      }
+    }
+  }
+
+  console.log(`🚀 Server is running!`);
+  console.log('='.repeat(50));
+  
+  // 3. Выводим ссылки подключения
+  console.log('\n🔗 Connect using one of these:');
+  console.log(`   🏠 Local:       http://localhost:${PORT}`);
+  
+  wifiLAN.forEach(ip => {
+    console.log(`   ✅ Wi-Fi/LAN:   http://${ip}:${PORT}`);
+  });
+
+  others.forEach(ip => {
+    console.log(`   🌐 Other:       http://${ip}:${PORT}`);
+  });
+
+  console.log('\n' + '='.repeat(50));
+
+  // 4. Выводим настройки (как ты просил)
+  console.log(`\n📁 Shared folder: ${SHARED_ROOT}`); // Дублируем, если нужно именно внизу
+  console.log(`📊 Max file size: ${(MAX_FILE_SIZE / (1024*1024*1024)).toFixed(2)} GB`);
+  console.log(`🔑 Server password: ${ACCESS_PASSWORD}`);
+  console.log('\nWaiting for connections...\n');
+}
+
 // ======================
 // СТАРТ
 // ======================
-server.listen(PORT, () => {
-  console.log(`🚀 Server running on http://localhost:${PORT}`);
-  console.log(`📁 Shared folder: ${SHARED_ROOT}`);
-  console.log(`📊 Max file size: ${MAX_FILE_SIZE / (1024*1024*1024)}GB`);
+server.listen(PORT, '0.0.0.0', () => { // '0.0.0.0' важен, чтобы слушать всю сеть
+  printServerInfo();
 });
