@@ -895,3 +895,59 @@ button:disabled {
     margin-bottom: 20px;
 }
 .docx-wrapper section { padding: 30px !important; } /* Отступы страницы */
+
+/* ========== Поиск ========== */
+.search-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+#searchInput {
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+  padding: 10px 12px;
+  color: #fff;
+  font-size: 14px;
+  width: 180px;
+  transition: all 0.2s;
+}
+
+#searchInput:focus {
+  outline: none;
+  border-color: #4ecca3;
+  background: rgba(255, 255, 255, 0.15);
+  width: 220px; /* Расширяется при фокусе */
+}
+
+/* ========== Drag & Drop Zone ========== */
+#dropZone {
+  display: none; /* <--- ГЛАВНОЕ ИСПРАВЛЕНИЕ: Скрыто по умолчанию */
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(26, 26, 46, 0.95);
+  z-index: 9999;
+  align-items: center;
+  justify-content: center;
+  backdrop-filter: blur(5px);
+  border: 4px dashed #4ecca3;
+  box-sizing: border-box; /* <--- Чтобы рамка не вылезала за экран */
+  padding: 20px; /* Отступ внутри рамки */
+}
+
+/* Когда добавляем этот класс JS-ом — окно появляется */
+#dropZone.active {
+  display: flex !important;
+}
+
+.drop-message {
+  text-align: center;
+  color: #4ecca3;
+  font-size: 24px;
+  font-weight: 600;
+  pointer-events: none; /* Важно: чтобы текст не мешал событию drop */
+}

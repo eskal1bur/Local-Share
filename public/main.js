@@ -1,6 +1,8 @@
 let ws;
 let refreshInterval;
 let lastViewedToken = null;
+let searchQuery = ''; // Для поиска
+const dropZone = document.getElementById('dropZone'); // Элемент зоны
 
 const SAVED_PASS_KEY = 'localshare_password';
 
@@ -1015,12 +1017,21 @@ function render(path, items) {
   currentPath = path;
   currentItems = items;
   
-  const sortedItems = sortItems(items);
+  // 1. ФИЛЬТРАЦИЯ (ПОИСК)
+  let filteredItems = items;
+  if (searchQuery) {
+    const q = searchQuery.toLowerCase();
+    filteredItems = items.filter(item => item.name.toLowerCase().includes(q));
+  }
+
+  // 2. СОРТИРОВКА (уже отфильтрованных элементов)
+  const sortedItems = sortItems(filteredItems);
   
   fileList.innerHTML = '';
 
   if (sortedItems.length === 0) {
-    fileList.innerHTML = '<li class="empty-message">📂 Папка пуста</li>';
+    const msg = searchQuery ? '🔍 Ничего не найдено' : '📂 Папка пуста';
+    fileList.innerHTML = `<li class="empty-message">${msg}</li>`;
     return;
   }
 
@@ -1200,4 +1211,71 @@ document.getElementById('cancelSelectionBtn').onclick = exitSelectionMode;
 // ========== Обработчики сортировки ==========
 document.querySelectorAll('.sort-btn').forEach(btn => {
   btn.onclick = () => setSort(btn.dataset.sort);
+});
+
+// ==========================================
+// ПОИСК
+// ==========================================
+const searchInput = document.getElementById('searchInput');
+
+searchInput.oninput = (e) => {
+  searchQuery = e.target.value.trim();
+  // Перерисовываем текущий путь с текущими данными, но с новым фильтром
+  render(currentPath, currentItems);
+};
+
+// ==========================================
+// DRAG AND DROP
+// ==========================================
+// Удаляем hidden, если он был в HTML, теперь управляем через класс
+if (dropZone) dropZone.hidden = false; 
+
+let dragCounter = 0;
+
+window.addEventListener('dragenter', (e) => {
+  e.preventDefault();
+  dragCounter++;
+  // Добавляем класс, чтобы показать окно
+  dropZone.classList.add('active');
+});
+
+window.addEventListener('dragleave', (e) => {
+  e.preventDefault();
+  dragCounter--;
+  
+  // Скрываем, только если мышь реально ушла с окна (счетчик 0)
+  if (dragCounter === 0) {
+    dropZone.classList.remove('active');
+  }
+});
+
+window.addEventListener('dragover', (e) => {
+  e.preventDefault();
+  // Обязательно, чтобы разрешить drop
+});
+
+window.addEventListener('drop', (e) => {
+  e.preventDefault();
+  e.stopPropagation();
+  
+  // Сброс состояния
+  dragCounter = 0;
+  dropZone.classList.remove('active'); // Скрываем окно
+  
+  const files = e.dataTransfer.files;
+  if (files.length > 0) {
+    console.log(`📥 Dropped ${files.length} files`);
+    
+    // Добавляем файлы в очередь
+    for (const file of files) {
+      uploadQueue.push({
+        id: generateUploadId(),
+        file: file
+      });
+    }
+    
+    // Запускаем загрузку
+    updateUploadUI();
+    processNextUpload();
+  }
 });
